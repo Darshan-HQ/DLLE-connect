@@ -6,6 +6,10 @@ import 'event_details.dart';
 import 'announcement_screen.dart';
 import 'upload_screen.dart';
 import 'setting_screen.dart';
+import 'notification_screen.dart';
+import 'certificates_screen.dart';
+import '../services/Certificate_service.dart';
+import '../utils/responsive_helper.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -15,14 +19,8 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _currentIndex = 0; // Default to Dashboard (Index 0)
+  int _currentIndex = 0;
 
-  // ✅ PAGE ORDER:
-  // 0: DashboardHomeContent
-  // 1: StudentAnnouncementScreen
-  // 2: EventsScreen
-  // 3: UploadScreen
-  // 4: StudentSettingsScreen
   final List<Widget> _pages = [
     const DashboardHomeContent(),
     const StudentAnnouncementScreen(),
@@ -36,23 +34,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final navTheme = Theme.of(context).bottomNavigationBarTheme;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-
-      // This switches the main content
       body: _pages[_currentIndex],
-
-      // This is the ONLY Navigation Bar in the app
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        color: navTheme.backgroundColor,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            navItem(Icons.home, "Dashboard", 0),
-            navItem(Icons.campaign, "Announcement", 1),
-            navItem(Icons.calendar_today, "Events", 2),
-            navItem(Icons.upload, "Upload", 3),
-            navItem(Icons.settings, "Settings", 4),
-          ],
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          color: navTheme.backgroundColor,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              navItem(Icons.home, "Dashboard", 0),
+              navItem(Icons.campaign, "Announcement", 1),
+              navItem(Icons.calendar_today, "Events", 2),
+              navItem(Icons.upload, "Upload", 3),
+              navItem(Icons.settings, "Settings", 4),
+            ],
+          ),
         ),
       ),
     );
@@ -60,22 +56,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget navItem(IconData icon, String label, int index) {
     final selected = _currentIndex == index;
-    final color = selected ? Colors.blueAccent : Colors.black;
+    final navTheme = Theme.of(context).bottomNavigationBarTheme;
+    final selectedColor = navTheme.selectedItemColor ?? Colors.blueAccent;
+    final unselectedColor = navTheme.unselectedItemColor ?? Colors.grey;
+
     return GestureDetector(
-      onTap: () {
-        setState(() => _currentIndex = index);
-      },
+      onTap: () => setState(() => _currentIndex = index),
       child: Container(
         color: Colors.transparent,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon),
+            Icon(icon, color: selected ? selectedColor : unselectedColor),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                color: selected ? Colors.blueAccent : Colors.grey,
+                color: selected ? selectedColor : unselectedColor,
                 fontSize: 12,
               ),
             ),
@@ -86,14 +83,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-// ... (Keep the DashboardHomeContent class below as it was in previous code)
 class DashboardHomeContent extends StatefulWidget {
   const DashboardHomeContent({super.key});
 
   @override
   State<DashboardHomeContent> createState() => _DashboardHomeContentState();
 }
-// ... (Paste the rest of DashboardHomeContent logic here)
+
 class _DashboardHomeContentState extends State<DashboardHomeContent> {
   bool _isLoading = true;
 
@@ -104,47 +100,46 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
   }
 
   Future<void> _loadData() async {
-    if (mounted) {
-      setState(() => _isLoading = true);
-    }
+    if (mounted) setState(() => _isLoading = true);
     await DataService.instance.fetchEvents();
     await DataService.instance.fetchAnnouncements();
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
+    if (mounted) setState(() => _isLoading = false);
   }
 
-  // -------- DATA PROCESSING FOR GRAPH --------
+  static const _monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+
   Map<String, int> getMonthlyJoinedData() {
     final joinedEvents = DataService.instance.joinedEvents;
     Map<String, int> monthlyCounts = {};
-
     for (var event in joinedEvents) {
-      try {
-        List<String> parts = event.date.split(' ');
-        if (parts.length >= 2) {
-          String month = parts[1].substring(0, 3);
-          monthlyCounts[month] = (monthlyCounts[month] ?? 0) + 1;
-        }
-      } catch (e) {
-        debugPrint("Error parsing date: ${event.date}");
-      }
+      final month = _monthNames[event.eventdate.month - 1];
+      monthlyCounts[month] = (monthlyCounts[month] ?? 0) + 1;
     }
     return monthlyCounts;
   }
 
-  Future<void> _handleRefresh() async {
-    await _loadData();
+  Map<String, int> getMonthlyCompletedData() {
+    final completedEvents = DataService.instance.completedEvents;
+    Map<String, int> monthlyCounts = {};
+    for (var event in completedEvents) {
+      final month = _monthNames[event.eventdate.month - 1];
+      monthlyCounts[month] = (monthlyCounts[month] ?? 0) + 1;
+    }
+    return monthlyCounts;
   }
 
-  // -------- NAVIGATION HELPER --------
+  Future<void> _handleRefresh() async => _loadData();
+
   void _navigateToEventList(String title, List<EventItem> events) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => EventListScreen(title: title, events: events),
       ),
-    );
+    ).then((_) => _loadData());
   }
 
   @override
@@ -161,33 +156,82 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
     }
 
     final data = DataService.instance;
+    final suggestedEvents = data.suggestedEvents;
     final joinedEvents = data.joinedEvents;
     final completedEvents = data.completedEvents;
     final totalHours = completedEvents.fold<int>(0, (sum, e) => sum + e.hours);
-
-    final monthlyData = getMonthlyJoinedData();
-    final List<String> monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final monthlyJoinedData = getMonthlyJoinedData();
+    final monthlyCompletedData = getMonthlyCompletedData();
+    const List<String> monthOrder = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-
-      // AppBar is here so it only shows on the "Dashboard" tab
       appBar: AppBar(
         title: const Text("Dashboard"),
         automaticallyImplyLeading: false,
+        actions: [
+          ValueListenableBuilder<int>(
+            valueListenable: DataService.instance.notificationCountNotifier,
+            builder: (context, count, _) {
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_outlined),
+                    tooltip: "Notifications",
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const NotificationScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  if (count > 0)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: const BoxDecoration(
+                          color: Colors.redAccent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            count > 99 ? "99+" : count.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
-
       body: RefreshIndicator(
         onRefresh: _handleRefresh,
         color: Theme.of(context).primaryColor,
         backgroundColor: Theme.of(context).cardTheme.color,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          child: Column(
+          padding: ResponsiveHelper.padding(context),
+          child: ResponsiveWrapper(
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
               // -------- PROFILE CARD --------
               Container(
                 padding: const EdgeInsets.all(16),
@@ -197,26 +241,36 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
                 ),
                 child: Row(
                   children: [
-                    const CircleAvatar(
-                      radius: 28,
+                    CircleAvatar(
+                      radius: ResponsiveHelper.avatarRadius(context, 28),
                       backgroundColor: Colors.grey,
-                      child: Icon(Icons.person, color: Colors.white),
+                      child: Icon(Icons.person, color: Colors.white,
+                        size: ResponsiveHelper.iconSize(context, 24)),
                     ),
                     const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
                             data.studentName.isEmpty ? "Student Name" : data.studentName,
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18)),
-                        const SizedBox(height: 4),
-                        Text("ID: ${data.studentId.isEmpty ? "Unknown" : data.studentId}",
-                            style: Theme.of(context).textTheme.bodyMedium),
-                        const SizedBox(height: 4),
-                        Text("Course: ${data.studentCourse.isEmpty ? "Unknown" : data.studentCourse}",
-                            style: Theme.of(context).textTheme.bodyMedium),
-                      ],
-                    )
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontSize: ResponsiveHelper.fontSize(context, 18),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "ID: ${data.studentId.isEmpty ? "Unknown" : data.studentId}",
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Course: ${data.studentCourse.isEmpty ? "Unknown" : data.studentCourse}",
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -227,20 +281,22 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
               Row(
                 children: [
                   Expanded(
-                      child: statCard(
-                          totalHours.toString(),
-                          "Total Hours",
-                          Icons.access_time,
-                          Colors.blueAccent
-                      )),
+                    child: statCard(
+                      totalHours.toString(),
+                      "Total Hours",
+                      Icons.access_time,
+                      Colors.blueAccent,
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
-                      child: statCard(
-                          completedEvents.length.toString(),
-                          "Events Completed",
-                          Icons.check_circle,
-                          Colors.greenAccent
-                      )),
+                    child: statCard(
+                      completedEvents.length.toString(),
+                      "Events Completed",
+                      Icons.check_circle,
+                      Colors.greenAccent,
+                    ),
+                  ),
                 ],
               ),
 
@@ -249,7 +305,9 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
               // -------- MONTHLY GRAPH --------
               Text(
                 "Monthly Joined Events",
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: ResponsiveHelper.fontSize(context, 16),
+                ),
               ),
               const SizedBox(height: 12),
 
@@ -260,52 +318,170 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: SizedBox(
-                  height: 180,
-                  child: monthlyData.isEmpty
-                      ? const Center(
-                    child: Text(
-                      "No events joined yet",
-                    ),
-                  )
-                      : Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: monthOrder.map((month) {
-                      if (!monthlyData.containsKey(month)) return const SizedBox.shrink();
+                  height: ResponsiveHelper.imageHeight(context, 210),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final barWidth = ResponsiveHelper.isDesktop(context)
+                          ? 10.0
+                          : ResponsiveHelper.isTablet(context)
+                              ? 9.0
+                              : 7.0;
 
-                      int count = monthlyData[month] ?? 0;
-                      int maxCount = monthlyData.values.reduce((a, b) => a > b ? a : b);
-                      double barHeight = (count / (maxCount == 0 ? 1 : maxCount)) * 120;
+                      final allValues = [
+                        ...monthlyJoinedData.values,
+                        ...monthlyCompletedData.values,
+                      ];
+                      final int maxCount = allValues.isEmpty
+                          ? 1
+                          : allValues.reduce((a, b) => a > b ? a : b);
 
                       return Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          Text(
-                            count.toString(),
-                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 4),
-                          Container(
-                            width: 20,
-                            height: barHeight < 10 ? 10 : barHeight,
-                            decoration: BoxDecoration(
-                              color: Colors.blueAccent,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
+                          // ---- Legend ----
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _legendDot(Colors.blueAccent, "Joined"),
+                              const SizedBox(width: 16),
+                              _legendDot(Colors.green, "Completed"),
+                            ],
                           ),
                           const SizedBox(height: 8),
-                          Text(
-                            month,
-                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                          // ---- Bars ----
+                          Expanded(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: monthOrder.map((month) {
+                                final int jCount = monthlyJoinedData[month] ?? 0;
+                                final int cCount = monthlyCompletedData[month] ?? 0;
+                                final double jHeight = jCount > 0
+                                    ? (jCount / maxCount) * 100
+                                    : 6.0;
+                                final double cHeight = cCount > 0
+                                    ? (cCount / maxCount) * 100
+                                    : 6.0;
+
+                                return Column(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    // Two bars side by side
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        // Joined bar
+                                        Column(
+                                          mainAxisAlignment: MainAxisAlignment.end,
+                                          children: [
+                                            if (jCount > 0)
+                                              Text(
+                                                jCount.toString(),
+                                                style: TextStyle(
+                                                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                                                  fontSize: ResponsiveHelper.fontSize(context, 9),
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            const SizedBox(height: 2),
+                                            Container(
+                                              width: barWidth,
+                                              height: jHeight,
+                                              decoration: BoxDecoration(
+                                                color: jCount > 0
+                                                    ? Colors.blueAccent
+                                                    : Colors.blueAccent.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(3),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(width: 2),
+                                        // Completed bar
+                                        Column(
+                                          mainAxisAlignment: MainAxisAlignment.end,
+                                          children: [
+                                            if (cCount > 0)
+                                              Text(
+                                                cCount.toString(),
+                                                style: TextStyle(
+                                                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                                                  fontSize: ResponsiveHelper.fontSize(context, 9),
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            const SizedBox(height: 2),
+                                            Container(
+                                              width: barWidth,
+                                              height: cHeight,
+                                              decoration: BoxDecoration(
+                                                color: cCount > 0
+                                                    ? Colors.green
+                                                    : Colors.green.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(3),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      month,
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.color
+                                            ?.withOpacity(0.6),
+                                        fontSize: ResponsiveHelper.fontSize(context, 9),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }).toList(),
+                            ),
                           ),
                         ],
                       );
-                    }).toList(),
+                    },
                   ),
                 ),
               ),
 
               const SizedBox(height: 20),
+
+              // -------- EVENT SUGGESTIONS SECTION --------
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        "Event Suggestions",
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontSize: ResponsiveHelper.fontSize(context, 16),
+                            ),
+                      ),
+                    ],
+                  ),
+                  TextButton(
+                    onPressed: () =>
+                        _navigateToEventList("Event Suggestions", suggestedEvents),
+                    child: const Text("View All",
+                        style: TextStyle(color: Colors.indigo)),
+                  ),
+                ],
+              ),
+
+              if (suggestedEvents.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Center(child: Text("No suggestions available")),
+                ),
+
+              for (var e in suggestedEvents.take(3)) suggestionTile(e),
+
+              const SizedBox(height: 10),
 
               // -------- JOINED EVENTS SECTION --------
               Row(
@@ -313,7 +489,9 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
                 children: [
                   Text(
                     "Joined Events",
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontSize: ResponsiveHelper.fontSize(context, 16),
+                    ),
                   ),
                   TextButton(
                     onPressed: () => _navigateToEventList("Joined Events", joinedEvents),
@@ -325,13 +503,10 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
               if (joinedEvents.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 20),
-                  child: Center(
-                    child: Text("No joined events"),
-                  ),
+                  child: Center(child: Text("No joined events")),
                 ),
 
-              for (var e in joinedEvents.take(3))
-                eventTile(e),
+              for (var e in joinedEvents.take(3)) eventTile(e),
 
               const SizedBox(height: 10),
 
@@ -341,7 +516,9 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
                 children: [
                   Text(
                     "Activity Completed",
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontSize: ResponsiveHelper.fontSize(context, 16),
+                    ),
                   ),
                   TextButton(
                     onPressed: () => _navigateToEventList("Completed Events", completedEvents),
@@ -353,17 +530,75 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
               if (completedEvents.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 20),
-                  child: Center(
-                    child: Text("No completed events"),
-                  ),
+                  child: Center(child: Text("No completed events")),
                 ),
 
-              for (var e in completedEvents.take(3))
-                completedTile(e),
+              for (var e in completedEvents.take(3)) completedTile(e),
+
+              const SizedBox(height: 10),
+
+              // -------- MY CERTIFICATES SECTION --------
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.workspace_premium, color: Colors.amber, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        "My Certificates",
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontSize: ResponsiveHelper.fontSize(context, 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const CertificatesScreen()),
+                      ).then((_) => _loadData());
+                    },
+                    child: const Text("View All", style: TextStyle(color: Colors.indigo)),
+                  ),
+                ],
+              ),
+
+              if (completedEvents.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Center(child: Text("No certificates yet")),
+                ),
+
+              for (var e in completedEvents.take(3)) certificateTile(e),
+
+              const SizedBox(height: 20),
             ],
+          ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _legendDot(Color color, String label) {
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: ResponsiveHelper.fontSize(context, 11),
+            color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+          ),
+        ),
+      ],
     );
   }
 
@@ -376,12 +611,15 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
       ),
       child: Column(
         children: [
-          Icon(icon, color: color, size: 28),
+          Icon(icon, color: color, size: ResponsiveHelper.iconSize(context, 28)),
           const SizedBox(height: 10),
-          Text(value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 22)),
+          Text(value, style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontSize: ResponsiveHelper.fontSize(context, 22),
+          )),
           const SizedBox(height: 6),
-          Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          Text(label, style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontSize: ResponsiveHelper.fontSize(context, 13),
+          )),
         ],
       ),
     );
@@ -392,10 +630,8 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => EventDetailsScreen(event: event),
-          ),
-        );
+          MaterialPageRoute(builder: (_) => EventDetailsScreen(event: event)),
+        ).then((_) => _loadData());
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
@@ -407,19 +643,188 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(event.title,
-                    style: const TextStyle(color: Colors.white, fontSize: 14)),
-                const SizedBox(height: 4),
-                Text(event.date,
-                    style: const TextStyle(color: Colors.white54, fontSize: 12)),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    event.title,
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                      fontSize: ResponsiveHelper.fontSize(context, 14),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    event.date,
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6),
+                      fontSize: ResponsiveHelper.fontSize(context, 12),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const Icon(Icons.arrow_forward_ios, color: Colors.black, size: 16),
+            Icon(Icons.arrow_forward_ios, color: Theme.of(context).iconTheme.color, size: 16),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget suggestionTile(EventItem event) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => EventDetailsScreen(event: event)),
+        ).then((_) => _loadData());
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardTheme.color,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.orangeAccent.withOpacity(0.4),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    event.title,
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                      fontSize: ResponsiveHelper.fontSize(context, 14),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    event.date,
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6),
+                      fontSize: ResponsiveHelper.fontSize(context, 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.orangeAccent.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                "${event.hours} hrs",
+                style: TextStyle(
+                  color: Colors.orangeAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: ResponsiveHelper.fontSize(context, 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget certificateTile(EventItem event) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.amber.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.amber.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.workspace_premium,
+              color: Colors.amber,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.title,
+                  style: TextStyle(
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                    fontSize: ResponsiveHelper.fontSize(context, 14),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  event.date,
+                  style: TextStyle(
+                    color: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.color
+                        ?.withOpacity(0.55),
+                    fontSize: ResponsiveHelper.fontSize(context, 11),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          InkWell(
+            onTap: () async {
+              try {
+                await CertificateService.generateAndDownload(event);
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blueAccent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.download_rounded,
+                color: Colors.blueAccent,
+                size: ResponsiveHelper.iconSize(context, 20),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -429,10 +834,8 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => EventDetailsScreen(event: event),
-          ),
-        );
+          MaterialPageRoute(builder: (_) => EventDetailsScreen(event: event)),
+        ).then((_) => _loadData());
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
@@ -444,19 +847,37 @@ class _DashboardHomeContentState extends State<DashboardHomeContent> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(event.title,
-                    style: const TextStyle(color: Colors.white, fontSize: 14)),
-                const SizedBox(height: 4),
-                Text(event.date,
-                    style: const TextStyle(color: Colors.white54, fontSize: 12)),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    event.title,
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                      fontSize: ResponsiveHelper.fontSize(context, 14),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    event.date,
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6),
+                      fontSize: ResponsiveHelper.fontSize(context, 12),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            Text("+${event.hours} Hours",
-                style: const TextStyle(
-                    color: Colors.greenAccent, fontWeight: FontWeight.bold)),
+            Text(
+              "+${event.hours} Hours",
+              style: TextStyle(
+                color: Colors.greenAccent,
+                fontWeight: FontWeight.bold,
+                fontSize: ResponsiveHelper.fontSize(context, 13),
+              ),
+            ),
           ],
         ),
       ),
@@ -474,7 +895,7 @@ class EventListScreen extends StatelessWidget {
   const EventListScreen({
     super.key,
     required this.title,
-    required this.events
+    required this.events,
   });
 
   @override
@@ -483,44 +904,78 @@ class EventListScreen extends StatelessWidget {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(title: Text(title)),
       body: events.isEmpty
-          ? const Center(child: Text("No events found", style: TextStyle(color: Colors.white54)))
+          ? Center(
+              child: Text(
+                "No events found",
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
+                ),
+              ),
+            )
           : ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: events.length,
-        itemBuilder: (context, index) {
-          final event = events[index];
-          return GestureDetector(
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => EventDetailsScreen(event: event)));
-            },
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardTheme.color,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(event.title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      Text(event.date, style: const TextStyle(color: Colors.white70)),
-                    ],
+              padding: const EdgeInsets.all(16),
+              itemCount: events.length,
+              itemBuilder: (context, index) {
+                final event = events[index];
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EventDetailsScreen(event: event),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardTheme.color,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              event.title,
+                              style: TextStyle(
+                                color: Theme.of(context).textTheme.bodyLarge?.color,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              event.date,
+                              style: TextStyle(
+                                color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (event.completed)
+                          Text(
+                            "+${event.hours} Hrs",
+                            style: const TextStyle(
+                              color: Colors.greenAccent,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        else
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 16,
+                            color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
+                          ),
+                      ],
+                    ),
                   ),
-                  if (event.completed)
-                    Text("+${event.hours} Hrs", style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold))
-                  else
-                    const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.white54),
-                ],
-              ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 }

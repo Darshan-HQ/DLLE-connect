@@ -5,6 +5,8 @@ import 'coordinator_dashboard.dart';
 import 'data_service.dart';
 import 'dashboard_screen.dart';
 import 'signup_screen.dart';
+import 'email_confirmation_screen.dart';
+import '../utils/responsive_helper.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,7 +18,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController identifierController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  String selectedRole = 'student'; // Default role
+  String selectedRole = 'student';
   bool isLoading = false;
 
   void login() async {
@@ -39,7 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
           const SnackBar(content: Text("Please enter a valid Student ID or Email")),
         );
         return;
-      } 
+      }
 
       if (!isEmail && identifier.length < 5) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -67,7 +69,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final user = response.user;
       if (user != null) {
-        // Fetch actual role from the 'users' table in the database
         final userData = await Supabase.instance.client
             .from('users')
             .select('role, full_name, identifier')
@@ -75,7 +76,23 @@ class _LoginScreenState extends State<LoginScreen> {
             .maybeSingle();
 
         final actualRole = userData?['role'] ?? 'student';
-        
+
+        // Account was deleted by admin — block login
+        if (userData == null) {
+          await SupabaseService.signOut();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  "Your account has been removed. Please sign up again to continue.",
+                ),
+                duration: Duration(seconds: 4),
+              ),
+            );
+          }
+          return;
+        }
+
         if (actualRole != selectedRole) {
           await SupabaseService.signOut();
           if (mounted) {
@@ -88,21 +105,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
         String finalIdentifier = identifier;
         if (selectedRole == 'student' && identifier.contains('@')) {
-          finalIdentifier = userData?['identifier'] ?? identifier;
+          finalIdentifier = userData['identifier'] ?? identifier;
         }
 
         if (actualRole == 'student') {
           await DataService.instance.login(finalIdentifier);
         } else {
           DataService.instance.updateProfile(
-            name: userData?['full_name'] ?? identifier,
+            name: userData['full_name'] ?? identifier,
             id: identifier,
             course: 'Admin',
           );
           await DataService.instance.saveLoginSession(identifier);
           DataService.instance.isLoggedIn = true;
+          DataService.instance.isAdmin = true;
           DataService.instance.studentId = identifier;
-          DataService.instance.studentName = userData?['full_name'] ?? identifier;
+          DataService.instance.studentName = userData['full_name'] ?? identifier;
         }
 
         if (mounted) {
@@ -119,12 +137,38 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) {
         String errorMessage = e.toString();
-        if (errorMessage.contains("Invalid login credentials")) {
-          errorMessage = "Incorrect Credentials or Password";
+        if (errorMessage.startsWith("Exception: ")) {
+          errorMessage = errorMessage.replaceFirst("Exception: ", "");
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage)),
-        );
+
+        if (errorMessage.contains("Email not confirmed")) {
+          String email = identifierController.text.trim();
+          if (selectedRole == 'student' && !email.contains('@')) {
+            try {
+              final userData = await Supabase.instance.client
+                  .from('users')
+                  .select('email')
+                  .eq('identifier', email)
+                  .maybeSingle();
+              if (userData != null && userData['email'] != null) {
+                email = userData['email'];
+              }
+            } catch (_) {}
+          }
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => EmailConfirmationScreen(email: email),
+            ),
+          );
+        } else {
+          if (errorMessage.contains("Invalid login credentials")) {
+            errorMessage = "Incorrect Credentials or Password";
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(errorMessage)),
+          );
+        }
       }
     } finally {
       if (mounted) setState(() => isLoading = false);
@@ -133,36 +177,36 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textColor = theme.textTheme.bodyLarge?.color;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFFFF),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
+          padding: ResponsiveHelper.padding(context),
+          child: ResponsiveWrapper(
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               SizedBox(
-                height: 150,
+                height: ResponsiveHelper.imageHeight(context, 150),
                 child: Image.asset(
-                  'assets/login_image.png',
+                  'assets/logo.png',
                   fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => 
+                  errorBuilder: (context, error, stackTrace) =>
                       const Icon(Icons.account_circle, size: 100, color: Colors.blueAccent),
                 ),
               ),
               const SizedBox(height: 30),
-              const Text(
+              Text(
                 "Welcome to DLLE Connect",
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: theme.textTheme.titleLarge?.copyWith(fontSize: 26),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 "Sign in to continue",
-                style: TextStyle(color: Colors.black),
+                style: TextStyle(color: theme.textTheme.bodyMedium?.color),
               ),
               const SizedBox(height: 30),
 
@@ -197,14 +241,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
               const SizedBox(height: 20),
-              
+
               inputField(
-                identifierController, 
+                identifierController,
                 selectedRole == 'student' ? "Student ID or Email" : "Admin Email",
-                keyboardType: selectedRole == 'student' ? TextInputType.text : TextInputType.emailAddress,
+                keyboardType: selectedRole == 'student'
+                    ? TextInputType.text
+                    : TextInputType.emailAddress,
               ),
               const SizedBox(height: 16),
-              
+
               inputField(passwordController, "Password", isPassword: true),
               const SizedBox(height: 30),
 
@@ -215,6 +261,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: isLoading ? null : login,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   child: isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
@@ -234,34 +282,39 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => const SignupScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const SignupScreen()),
                     );
                   },
-                  child: const Text(
+                  child: Text(
                     "New student? Sign up",
-                    style: TextStyle(color: Colors.black),
+                    style: TextStyle(color: textColor),
                   ),
                 ),
             ],
+          ),
           ),
         ),
       ),
     );
   }
 
-  Widget inputField(TextEditingController controller, String hint, {bool isPassword = false, TextInputType keyboardType = TextInputType.text}) {
+  Widget inputField(
+    TextEditingController controller,
+    String hint, {
+    bool isPassword = false,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    final theme = Theme.of(context);
     return TextField(
       controller: controller,
       obscureText: isPassword,
       keyboardType: keyboardType,
-      style: const TextStyle(color: Colors.black),
+      style: TextStyle(color: theme.textTheme.bodyLarge?.color),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.black45),
+        hintStyle: theme.inputDecorationTheme.hintStyle,
         filled: true,
-        fillColor: const Color(0xFFF1F1F1),
+        fillColor: theme.inputDecorationTheme.fillColor,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,

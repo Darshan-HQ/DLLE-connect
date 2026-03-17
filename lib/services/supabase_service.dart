@@ -11,6 +11,7 @@ class SupabaseService {
     required String name,
     required String department,
     required String role, // 'student'
+    int yearOfStudy = 1,
   }) async {
     // We do not include 'role' in metadata as it's handled in the database 'users' table
     final AuthResponse response = await _client.auth.signUp(
@@ -20,15 +21,21 @@ class SupabaseService {
         'full_name': name,
         'identifier': identifier,
         'department': department,
+        'year_of_study': yearOfStudy,
         'email': email,
       },
     );
 
-    if (response.session == null && response.user != null) {
-      throw Exception("Signup successful, but email confirmation is enabled in Supabase. Please disable 'Confirm Email' in Supabase Auth settings to allow instant login.");
-    }
-
+    // If session is null but user exists, email confirmation is pending — this is expected behavior
     return response;
+  }
+
+  // Resend confirmation email
+  static Future<void> resendConfirmationEmail(String email) async {
+    await _client.auth.resend(
+      type: OtpType.signup,
+      email: email,
+    );
   }
 
   // Login
@@ -66,7 +73,7 @@ class SupabaseService {
     );
 
     if (response.session == null && response.user != null) {
-      throw Exception("Email confirmation is required. Please disable 'Confirm Email' in your Supabase Auth settings.");
+      throw Exception("Email not confirmed. Please check your inbox and confirm your email before logging in.");
     }
 
     return response;

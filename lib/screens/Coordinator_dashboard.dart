@@ -1,8 +1,12 @@
-import 'package:app/screens/admin_announcement.dart';
-import 'package:app/screens/admin_setting screen.dart';
-import 'package:app/screens/manage_events.dart';
+import 'package:dlle_connect/screens/admin_announcement.dart';
+import 'package:dlle_connect/screens/admin_setting_screen.dart';
+import 'package:dlle_connect/screens/manage_events.dart';
+import 'package:dlle_connect/screens/manage_courses_screen.dart';
 import 'package:flutter/material.dart';
 import 'manage_stu_screen.dart';
+import 'data_service.dart';
+import 'notification_screen.dart';
+import '../utils/responsive_helper.dart';
 
 class CoordinatorDashboardScreen extends StatelessWidget {
   const CoordinatorDashboardScreen({super.key});
@@ -12,36 +16,79 @@ class CoordinatorDashboardScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
-        title: const Text(
-          "Dashboard",
-        ),
+        title: const Text("Dashboard"),
         centerTitle: true,
-        leading: const Padding(
-          padding: EdgeInsets.all(8.0),
+        actions: [
+          ValueListenableBuilder<int>(
+            valueListenable: DataService.instance.notificationCountNotifier,
+            builder: (context, count, _) {
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_outlined),
+                    tooltip: "Notifications",
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const NotificationScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  if (count > 0)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: const BoxDecoration(
+                          color: Colors.redAccent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            count > 99 ? "99+" : count.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
-        ),
+          const SizedBox(width: 4),
+        ],
+      ),
 
-      body: Padding(
-        padding: const EdgeInsets.all(20),
+      body: SingleChildScrollView(
+        padding: ResponsiveHelper.padding(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            const Text(
+            Text(
               "Manage",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontSize: ResponsiveHelper.fontSize(context, 20),
               ),
             ),
 
             const SizedBox(height: 20),
 
             GridView.count(
-              crossAxisCount: 2,
+              crossAxisCount: ResponsiveHelper.dashboardGridColumns(context),
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
               shrinkWrap: true,
+              childAspectRatio: ResponsiveHelper.gridAspectRatio(context),
               physics: const NeverScrollableScrollPhysics(),
               children: [
 
@@ -78,13 +125,27 @@ class CoordinatorDashboardScreen extends StatelessWidget {
                 ),
 
                 DashboardCard(
-                  icon: Icons.settings,
-                  title: "Settings", onTap: () {
+                  icon: Icons.school,
+                  title: "Manage Courses",
+                  onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const AdminSettingsScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const ManageCoursesScreen()),
                     );
-                },
+                  },
+                ),
+
+                DashboardCard(
+                  icon: Icons.settings,
+                  title: "Settings",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const AdminSettingsScreen()),
+                    );
+                  },
                 ),
               ],
             ),
@@ -112,7 +173,7 @@ class DashboardCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1F2933),
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(14),
       ),
       child: InkWell(
@@ -135,8 +196,8 @@ class DashboardCard extends StatelessWidget {
 
             Text(
               title,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyLarge?.color,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),

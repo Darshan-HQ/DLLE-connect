@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'data_service.dart';
 import 'login_screen.dart';
+import 'admin_password.dart';
+import '../utils/responsive_helper.dart';
 
 class AdminSettingsScreen extends StatefulWidget {
   const AdminSettingsScreen({super.key});
@@ -92,8 +94,11 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
         centerTitle: true,
         elevation: 0,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Center(
+        child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: ResponsiveHelper.maxFormWidth(context)),
+        child: ListView(
+        padding: ResponsiveHelper.padding(context),
         children: [
           Container(
             padding: const EdgeInsets.all(20),
@@ -140,6 +145,17 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             color: Colors.orangeAccent,
             onTap: _showChangeIdDialog,
           ),
+          _settingsTile(
+            icon: Icons.lock_outline,
+            title: "Change Password",
+            color: Colors.purpleAccent,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
+              );
+            },
+          ),
           const SizedBox(height: 24),
           _sectionHeader("App Settings", subTextColor),
           _settingsTile(
@@ -154,7 +170,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   DataService.instance.toggleTheme(value);
                 });
               },
-              activeColor: Colors.blueAccent,
+              activeThumbColor: Colors.blueAccent,
             ),
           ),
           const SizedBox(height: 40),
@@ -162,12 +178,13 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: () {
-                DataService.instance.logout();
+              onPressed: () async {
+                await DataService.instance.logout();
+                if (!mounted) return;
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      (route) => false,
+                  (route) => false,
                 );
               },
               style: ElevatedButton.styleFrom(
@@ -194,6 +211,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             ),
           ),
         ],
+        ),
+        ),
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'data_service.dart';
 import 'login_screen.dart';
+import '../utils/responsive_helper.dart';
 
 class StudentSettingsScreen extends StatefulWidget {
   const StudentSettingsScreen({super.key});
@@ -33,8 +34,11 @@ class _StudentSettingsScreenState extends State<StudentSettingsScreen> {
         title: const Text("Settings"),
         centerTitle: true,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Center(
+        child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: ResponsiveHelper.maxFormWidth(context)),
+        child: ListView(
+        padding: ResponsiveHelper.padding(context),
         children: [
 
           // -------- PROFILE CARD (READ ONLY) --------
@@ -107,7 +111,7 @@ class _StudentSettingsScreenState extends State<StudentSettingsScreen> {
                   DataService.instance.notificationEnabled = value;
                 });
               },
-              activeColor: Colors.blueAccent,
+              activeThumbColor: Colors.blueAccent,
             ),
           ),
 
@@ -124,7 +128,7 @@ class _StudentSettingsScreenState extends State<StudentSettingsScreen> {
                   DataService.instance.toggleTheme(value);
                 });
               },
-              activeColor: Colors.blueAccent,
+              activeThumbColor: Colors.blueAccent,
             ),
           ),
 
@@ -134,12 +138,13 @@ class _StudentSettingsScreenState extends State<StudentSettingsScreen> {
           SizedBox(
             height: 50,
             child: ElevatedButton(
-              onPressed: () {
-                DataService.instance.logout();
+              onPressed: () async {
+                await DataService.instance.logout();
+                if (!mounted) return;
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      (route) => false,
+                  (route) => false,
                 );
               },
               style: ElevatedButton.styleFrom(
@@ -150,6 +155,8 @@ class _StudentSettingsScreenState extends State<StudentSettingsScreen> {
             ),
           ),
         ],
+        ),
+        ),
       ),
     );
   }
@@ -205,7 +212,9 @@ class _StudentSettingsScreenState extends State<StudentSettingsScreen> {
                     controller: oldPasswordController,
                     decoration: const InputDecoration(labelText: "Old Password"),
                     obscureText: true,
+                    
                   ),
+                  Padding(padding: const EdgeInsets.symmetric(vertical: 8)),
                   TextField(
                     controller: newPasswordController,
                     decoration: const InputDecoration(labelText: "New Password"),
